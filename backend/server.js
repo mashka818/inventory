@@ -163,9 +163,10 @@ app.get('/api/inventory/:steamId/:appId', async (req, res) => {
       });
     } else if (response.status === 400) {
       console.log('❌ 400: Неверный запрос или инвентарь приватный');
+      console.log('❌ Тело ответа 400:', JSON.stringify(response.data));
       return res.json({
         success: false,
-        message: 'Инвентарь недоступен. Проверьте настройки приватности в Steam: Профиль → Настройки конфиденциальности → Инвентарь (должен быть Публичным).'
+        message: 'Инвентарь недоступен. Возможно: 1) У пользователя нет предметов в этой игре, 2) Инвентарь приватный для этой игры.'
       });
     }
     
@@ -251,30 +252,48 @@ app.get('/api/user/:steamId', async (req, res) => {
 app.get('/api/user-games/:steamId', async (req, res) => {
   try {
     const { steamId } = req.params;
+    
+    const url = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${STEAM_API_KEY}&steamid=${steamId}&include_appinfo=1&include_played_free_games=1`;
+    console.log('🎮 Запрос игр для Steam ID:', steamId);
+    console.log('🌐 URL:', url.replace(STEAM_API_KEY, 'KEY'));
 
-    const response = await axios.get(
-      `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${STEAM_API_KEY}&steamid=${steamId}&include_appinfo=1&include_played_free_games=1`
-    );
+    const response = await axios.get(url);
+    
+    console.log('📥 Ответ получен');
+    console.log('📥 Структура:', response.data.response ? 'OK' : 'ERROR');
 
     if (response.data.response && response.data.response.games) {
-      // Фильтруем игры с инвентарем (CS:GO, Dota 2, TF2, и т.д.)
-      const gamesWithInventory = response.data.response.games.filter(game => {
-        const inventoryGames = [730, 570, 440, 578080, 252490]; // CS:GO, Dota 2, TF2, PUBG, Rust
-        return inventoryGames.includes(game.appid);
-      });
+      const totalGames = response.data.response.games.length;
+      console.log('🎮 Всего игр:', totalGames);
+      
+      // Фильтруем игры с инвентарем (CS:GO/CS2, Dota 2, TF2, и т.д.)
+      const inventoryGames = [730, 570, 440, 578080, 252490]; // CS2, Dota 2, TF2, PUBG, Rust
+      const gamesWithInventory = response.data.response.games.filter(game => 
+        inventoryGames.includes(game.appid)
+      );
+      
+      console.log('🎒 Игр с инвентарем:', gamesWithInventory.length);
+      console.log('🎒 Найденные игры:', gamesWithInventory.map(g => `${g.name} (${g.appid})`).join(', '));
+
+      const resultGames = gamesWithInventory.length > 0 ? gamesWithInventory : response.data.response.games.slice(0, 10);
+      console.log('✅ Отправляем игр:', resultGames.length);
 
       res.json({
         success: true,
-        games: gamesWithInventory.length > 0 ? gamesWithInventory : response.data.response.games.slice(0, 10)
+        games: resultGames
       });
     } else {
+      console.log('⚠️ Нет данных об играх в ответе');
       res.json({
         success: false,
         message: 'Не удалось получить список игр'
       });
     }
   } catch (error) {
-    console.error('Ошибка получения списка игр:', error.message);
+    console.error('❌ Ошибка получения списка игр:', error.message);
+    console.error('❌ Статус:', error.response?.status);
+    console.error('❌ Данные:', error.response?.data);
+    
     res.status(500).json({
       success: false,
       message: 'Не удалось получить список игр. Возможно, профиль приватный.'

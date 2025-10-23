@@ -18,7 +18,7 @@ app.get('/api/search-users/:username', async (req, res) => {
     const { username } = req.params;
     const allUsers = [];
     
-    // 1. Пробуем найти через Steam Community XML API (неофициальный, но работает)
+    // 1. Пробуем найти через Steam Community API с правильными заголовками
     try {
       const searchResponse = await axios.get(
         `https://steamcommunity.com/search/SearchCommunityAjax`,
@@ -29,7 +29,13 @@ app.get('/api/search-users/:username', async (req, res) => {
             sessionid: 'undefined',
             steamid_user: 'false',
             page: 1
-          }
+          },
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          timeout: 5000
         }
       );
 
@@ -54,7 +60,7 @@ app.get('/api/search-users/:username', async (req, res) => {
         }
       }
     } catch (searchError) {
-      console.log('Steam Community поиск не удался, пробуем ResolveVanityURL');
+      console.log('Steam Community поиск не удался:', searchError.message);
     }
 
     // 2. Если ничего не нашли, пробуем ResolveVanityURL (точное совпадение)

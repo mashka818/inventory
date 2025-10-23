@@ -103,17 +103,17 @@ app.get('/api/inventory/:steamId/:appId', async (req, res) => {
     const { steamId, appId } = req.params;
     const contextId = req.query.contextId || '2';
 
-    const url = `https://steamcommunity.com/inventory/${steamId}/${appId}/${contextId}?l=english&count=5000`;
+    // Правильный URL без лишних параметров (как curl)
+    const url = `https://steamcommunity.com/inventory/${steamId}/${appId}/${contextId}`;
+    
     console.log('🎒 Запрос инвентаря:', { steamId, appId, contextId });
     console.log('🌐 URL:', url);
 
-    // Получаем инвентарь через Steam Community API
+    // Получаем инвентарь через Steam Community API (минимум заголовков, как curl)
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': `https://steamcommunity.com/profiles/${steamId}/inventory/`
+        'User-Agent': 'curl/8.5.0',
+        'Accept': '*/*'
       },
       timeout: 15000,
       validateStatus: function (status) {

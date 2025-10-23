@@ -1,0 +1,29 @@
+# Backend
+backend/node_modules/
+backend/.env
+backend/*.log
+
+# Mobile
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/npm-debug.*
+mobile/*.jks
+mobile/*.p8
+mobile/*.p12
+mobile/*.key
+mobile/*.mobileprovision
+mobile/android/app/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/ios/Pods/
+mobile/ios/build/
+
+# Misc
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+

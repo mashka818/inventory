@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  inventory-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: inventory-checker-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - STEAM_API_KEY=${STEAM_API_KEY}
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/logs:/app/logs
+    networks:
+      - inventory-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/search-users/gaben"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  inventory-network:
+    driver: bridge
+
+volumes:
+  backend-logs:
+

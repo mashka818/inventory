@@ -1,29 +1,48 @@
-# Backend
+# ============================================
+# Backend only - для развертывания на сервере
+# ============================================
+
+# Backend зависимости и конфиденциальные файлы
 backend/node_modules/
 backend/.env
 backend/*.log
+backend/logs/
 
-# Mobile
-mobile/node_modules/
-mobile/.expo/
-mobile/dist/
-mobile/npm-debug.*
-mobile/*.jks
-mobile/*.p8
-mobile/*.p12
-mobile/*.key
-mobile/*.mobileprovision
-mobile/android/app/build/
-mobile/android/.gradle/
-mobile/android/local.properties
-mobile/ios/Pods/
-mobile/ios/build/
+# ============================================
+# Исключаем мобильное приложение (НЕ нужно на сервере)
+# ============================================
+mobile/
 
-# Misc
+# ============================================
+# Исключаем документацию для локальной разработки
+# ============================================
+QUICK_START.md
+PUBLISH_GUIDE.md
+SETUP_INSTRUCTIONS.md
+DEPLOY_GUIDE.md
+PROJECT_STRUCTURE.md
+TROUBLESHOOTING.md
+CHANGELOG.md
+CONTRIBUTING.md
+start-dev.bat
+
+# ============================================
+# Системные файлы
+# ============================================
 .DS_Store
 *.swp
 *.swo
 *~
 .vscode/
 .idea/
+Thumbs.db
+
+# ============================================
+# Оставляем для сервера:
+# - backend/
+# - docker-compose.yml
+# - DOCKER_DEPLOY.md
+# - README.md
+# - LICENSE
+# ============================================
 

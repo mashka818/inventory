@@ -18,72 +18,43 @@ app.get('/api/search-users/:username', async (req, res) => {
     const { username } = req.params;
     const allUsers = [];
     
-    // 1. Пробуем найти через Steam Community API с правильными заголовками
-    try {
-      const searchResponse = await axios.get(
-        `https://steamcommunity.com/search/SearchCommunityAjax`,
-        {
-          params: {
-            text: username,
-            filter: 'users',
-            sessionid: 'undefined',
-            steamid_user: 'false',
-            page: 1
-          },
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json, text/javascript, */*; q=0.01',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          timeout: 5000
+    // 1. Если введен Steam ID (только цифры), получаем напрямую
+    if (/^\d+$/.test(username)) {
+      try {
+        const userInfo = await axios.get(
+          `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${username}`
+        );
+        
+        if (userInfo.data.response.players.length > 0) {
+          return res.json({
+            success: true,
+            users: userInfo.data.response.players
+          });
         }
+      } catch (error) {
+        console.log('Поиск по Steam ID не удался');
+      }
+    }
+    
+    // 2. Ищем по vanity URL (никнейм)
+    try {
+      const response = await axios.get(
+        `http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${STEAM_API_KEY}&vanityurl=${username}`
       );
 
-      if (searchResponse.data && searchResponse.data.html) {
-        // Парсим HTML для извлечения Steam ID
-        const steamIdRegex = /data-miniprofile="(\d+)"/g;
-        const matches = [...searchResponse.data.html.matchAll(steamIdRegex)];
+      if (response.data.response.success === 1) {
+        const steamId = response.data.response.steamid;
         
-        if (matches.length > 0) {
-          // Извлекаем уникальные Steam ID (первые 10)
-          const steamIds = [...new Set(matches.map(m => m[1]))].slice(0, 10);
-          
-          // Получаем детальную информацию о пользователях
-          const steamIdsString = steamIds.join(',');
-          const userInfo = await axios.get(
-            `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamIdsString}`
-          );
-
-          if (userInfo.data.response.players.length > 0) {
-            allUsers.push(...userInfo.data.response.players);
-          }
-        }
-      }
-    } catch (searchError) {
-      console.log('Steam Community поиск не удался:', searchError.message);
-    }
-
-    // 2. Если ничего не нашли, пробуем ResolveVanityURL (точное совпадение)
-    if (allUsers.length === 0) {
-      try {
-        const response = await axios.get(
-          `http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${STEAM_API_KEY}&vanityurl=${username}`
+        const userInfo = await axios.get(
+          `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamId}`
         );
 
-        if (response.data.response.success === 1) {
-          const steamId = response.data.response.steamid;
-          
-          const userInfo = await axios.get(
-            `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamId}`
-          );
-
-          if (userInfo.data.response.players.length > 0) {
-            allUsers.push(...userInfo.data.response.players);
-          }
+        if (userInfo.data.response.players.length > 0) {
+          allUsers.push(...userInfo.data.response.players);
         }
-      } catch (vanityError) {
-        console.log('ResolveVanityURL не удался');
       }
+    } catch (vanityError) {
+      console.log('ResolveVanityURL не удался:', vanityError.message);
     }
 
     if (allUsers.length > 0) {
@@ -94,7 +65,7 @@ app.get('/api/search-users/:username', async (req, res) => {
     } else {
       res.json({
         success: false,
-        message: 'Пользователи не найдены',
+        message: 'Пользователь не найден. Попробуйте точный никнейм или Steam ID.',
         users: []
       });
     }

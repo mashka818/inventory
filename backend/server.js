@@ -110,48 +110,80 @@ app.get('/api/inventory/:steamId/:appId', async (req, res) => {
     // Получаем инвентарь через Steam Community API
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': `https://steamcommunity.com/profiles/${steamId}/inventory/`
       },
-      timeout: 10000
+      timeout: 15000,
+      validateStatus: function (status) {
+        return status < 500; // Не выбрасываем ошибку для статусов < 500
+      }
     });
 
     console.log('📦 Ответ получен, статус:', response.status);
-    console.log('📦 Данные:', response.data ? 'есть' : 'пусто');
 
-    if (response.data && response.data.assets) {
-      console.log('✅ Найдено предметов:', response.data.assets.length);
+    if (response.status === 200 && response.data) {
+      console.log('📦 Данные получены');
       
-      // Объединяем информацию о предметах с их описаниями
-      const items = response.data.assets.map(asset => {
-        const description = response.data.descriptions.find(
-          desc => desc.classid === asset.classid && desc.instanceid === asset.instanceid
-        );
-        return {
-          ...asset,
-          ...description
-        };
-      });
+      // Проверяем структуру ответа
+      if (response.data.assets && response.data.assets.length > 0) {
+        console.log('✅ Найдено предметов:', response.data.assets.length);
+        
+        // Объединяем информацию о предметах с их описаниями
+        const items = response.data.assets.map(asset => {
+          const description = response.data.descriptions.find(
+            desc => desc.classid === asset.classid && desc.instanceid === asset.instanceid
+          );
+          return {
+            ...asset,
+            ...description
+          };
+        });
 
-      res.json({
-        success: true,
-        items: items,
-        total: items.length
-      });
-    } else {
-      console.log('⚠️ Инвентарь пуст');
-      res.json({
+        return res.json({
+          success: true,
+          items: items,
+          total: items.length
+        });
+      } else if (response.data.total === 0) {
+        console.log('⚠️ Инвентарь пуст (total = 0)');
+        return res.json({
+          success: false,
+          message: 'У пользователя нет предметов в этой игре'
+        });
+      } else {
+        console.log('⚠️ Неожиданная структура данных:', JSON.stringify(response.data).substring(0, 200));
+      }
+    } else if (response.status === 403) {
+      console.log('❌ 403: Инвентарь приватный');
+      return res.json({
         success: false,
-        message: 'Инвентарь пуст или приватный'
+        message: 'Инвентарь приватный. Откройте настройки приватности инвентаря в Steam.'
+      });
+    } else if (response.status === 400) {
+      console.log('❌ 400: Неверный запрос или инвентарь приватный');
+      return res.json({
+        success: false,
+        message: 'Инвентарь недоступен. Проверьте настройки приватности в Steam: Профиль → Настройки конфиденциальности → Инвентарь (должен быть Публичным).'
       });
     }
+    
+    // Если дошли сюда - что-то пошло не так
+    console.log('⚠️ Непредвиденный ответ, статус:', response.status);
+    res.json({
+      success: false,
+      message: 'Инвентарь пуст или недоступен'
+    });
+    
   } catch (error) {
-    console.error('❌ Ошибка получения инвентаря:', error.message);
+    console.error('❌ Критическая ошибка получения инвентаря:', error.message);
     console.error('❌ Статус:', error.response?.status);
     console.error('❌ Данные:', error.response?.data);
     
     res.status(500).json({
       success: false,
-      message: 'Не удалось получить инвентарь. Возможно, профиль приватный или инвентарь пуст.'
+      message: 'Ошибка сервера при получении инвентаря'
     });
   }
 });

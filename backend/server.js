@@ -16,35 +16,88 @@ const STEAM_API_KEY = process.env.STEAM_API_KEY;
 app.get('/api/search-users/:username', async (req, res) => {
   try {
     const { username } = req.params;
+    const allUsers = [];
     
-    // Используем ResolveVanityURL для поиска пользователя
-    const response = await axios.get(
-      `http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${STEAM_API_KEY}&vanityurl=${username}`
-    );
-
-    if (response.data.response.success === 1) {
-      const steamId = response.data.response.steamid;
-      
-      // Получаем информацию о пользователе
-      const userInfo = await axios.get(
-        `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamId}`
+    // 1. Пробуем найти через Steam Community XML API (неофициальный, но работает)
+    try {
+      const searchResponse = await axios.get(
+        `https://steamcommunity.com/search/SearchCommunityAjax`,
+        {
+          params: {
+            text: username,
+            filter: 'users',
+            sessionid: 'undefined',
+            steamid_user: 'false',
+            page: 1
+          }
+        }
       );
 
+      if (searchResponse.data && searchResponse.data.html) {
+        // Парсим HTML для извлечения Steam ID
+        const steamIdRegex = /data-miniprofile="(\d+)"/g;
+        const matches = [...searchResponse.data.html.matchAll(steamIdRegex)];
+        
+        if (matches.length > 0) {
+          // Извлекаем уникальные Steam ID (первые 10)
+          const steamIds = [...new Set(matches.map(m => m[1]))].slice(0, 10);
+          
+          // Получаем детальную информацию о пользователях
+          const steamIdsString = steamIds.join(',');
+          const userInfo = await axios.get(
+            `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamIdsString}`
+          );
+
+          if (userInfo.data.response.players.length > 0) {
+            allUsers.push(...userInfo.data.response.players);
+          }
+        }
+      }
+    } catch (searchError) {
+      console.log('Steam Community поиск не удался, пробуем ResolveVanityURL');
+    }
+
+    // 2. Если ничего не нашли, пробуем ResolveVanityURL (точное совпадение)
+    if (allUsers.length === 0) {
+      try {
+        const response = await axios.get(
+          `http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${STEAM_API_KEY}&vanityurl=${username}`
+        );
+
+        if (response.data.response.success === 1) {
+          const steamId = response.data.response.steamid;
+          
+          const userInfo = await axios.get(
+            `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamId}`
+          );
+
+          if (userInfo.data.response.players.length > 0) {
+            allUsers.push(...userInfo.data.response.players);
+          }
+        }
+      } catch (vanityError) {
+        console.log('ResolveVanityURL не удался');
+      }
+    }
+
+    if (allUsers.length > 0) {
       res.json({
         success: true,
-        users: userInfo.data.response.players
+        users: allUsers
       });
     } else {
       res.json({
         success: false,
-        message: 'Пользователь не найден'
+        message: 'Пользователи не найдены',
+        users: []
       });
     }
   } catch (error) {
     console.error('Ошибка поиска пользователя:', error);
     res.status(500).json({
       success: false,
-      message: 'Ошибка сервера'
+      message: 'Ошибка сервера',
+      users: []
     });
   }
 });

@@ -16,53 +16,71 @@ const STEAM_API_KEY = process.env.STEAM_API_KEY;
 app.get('/api/search-users/:username', async (req, res) => {
   try {
     const { username } = req.params;
+    console.log('🔍 Поиск пользователя:', username);
+    console.log('🔑 STEAM_API_KEY установлен:', STEAM_API_KEY ? 'ДА' : 'НЕТ');
+    
     const allUsers = [];
     
     // 1. Если введен Steam ID (только цифры), получаем напрямую
     if (/^\d+$/.test(username)) {
+      console.log('📌 Поиск по Steam ID64');
       try {
-        const userInfo = await axios.get(
-          `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${username}`
-        );
+        const url = `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${username}`;
+        console.log('🌐 Запрос:', url.replace(STEAM_API_KEY, 'KEY'));
+        
+        const userInfo = await axios.get(url);
+        console.log('✅ Ответ GetPlayerSummaries:', JSON.stringify(userInfo.data));
         
         if (userInfo.data.response.players.length > 0) {
+          console.log('✅ Найден пользователь по Steam ID');
           return res.json({
             success: true,
             users: userInfo.data.response.players
           });
         }
       } catch (error) {
-        console.log('Поиск по Steam ID не удался');
+        console.error('❌ Поиск по Steam ID не удался:', error.message);
+        console.error('Детали:', error.response?.data);
       }
     }
     
     // 2. Ищем по vanity URL (никнейм)
+    console.log('📌 Поиск по Vanity URL');
     try {
-      const response = await axios.get(
-        `http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${STEAM_API_KEY}&vanityurl=${username}`
-      );
+      const url = `http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${STEAM_API_KEY}&vanityurl=${username}`;
+      console.log('🌐 Запрос:', url.replace(STEAM_API_KEY, 'KEY'));
+      
+      const response = await axios.get(url);
+      console.log('📥 Ответ ResolveVanityURL:', JSON.stringify(response.data));
 
       if (response.data.response.success === 1) {
         const steamId = response.data.response.steamid;
+        console.log('✅ Найден Steam ID:', steamId);
         
         const userInfo = await axios.get(
           `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamId}`
         );
+        console.log('📥 Ответ GetPlayerSummaries:', JSON.stringify(userInfo.data));
 
         if (userInfo.data.response.players.length > 0) {
           allUsers.push(...userInfo.data.response.players);
         }
+      } else {
+        console.log('⚠️ ResolveVanityURL вернул success !== 1');
       }
     } catch (vanityError) {
-      console.log('ResolveVanityURL не удался:', vanityError.message);
+      console.error('❌ ResolveVanityURL не удался:', vanityError.message);
+      console.error('Детали:', vanityError.response?.data);
     }
 
     if (allUsers.length > 0) {
+      console.log('✅ Отправляем', allUsers.length, 'пользователей');
       res.json({
         success: true,
         users: allUsers
       });
     } else {
+      console.log('❌ Пользователи не найдены');
       res.json({
         success: false,
         message: 'Пользователь не найден. Попробуйте точный никнейм или Steam ID.',
@@ -70,7 +88,7 @@ app.get('/api/search-users/:username', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Ошибка поиска пользователя:', error);
+    console.error('❌ Критическая ошибка поиска:', error);
     res.status(500).json({
       success: false,
       message: 'Ошибка сервера',
@@ -85,12 +103,24 @@ app.get('/api/inventory/:steamId/:appId', async (req, res) => {
     const { steamId, appId } = req.params;
     const contextId = req.query.contextId || '2';
 
+    const url = `https://steamcommunity.com/inventory/${steamId}/${appId}/${contextId}?l=english&count=5000`;
+    console.log('🎒 Запрос инвентаря:', { steamId, appId, contextId });
+    console.log('🌐 URL:', url);
+
     // Получаем инвентарь через Steam Community API
-    const response = await axios.get(
-      `https://steamcommunity.com/inventory/${steamId}/${appId}/${contextId}?l=english&count=5000`
-    );
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 10000
+    });
+
+    console.log('📦 Ответ получен, статус:', response.status);
+    console.log('📦 Данные:', response.data ? 'есть' : 'пусто');
 
     if (response.data && response.data.assets) {
+      console.log('✅ Найдено предметов:', response.data.assets.length);
+      
       // Объединяем информацию о предметах с их описаниями
       const items = response.data.assets.map(asset => {
         const description = response.data.descriptions.find(
@@ -108,16 +138,20 @@ app.get('/api/inventory/:steamId/:appId', async (req, res) => {
         total: items.length
       });
     } else {
+      console.log('⚠️ Инвентарь пуст');
       res.json({
         success: false,
         message: 'Инвентарь пуст или приватный'
       });
     }
   } catch (error) {
-    console.error('Ошибка получения инвентаря:', error.message);
+    console.error('❌ Ошибка получения инвентаря:', error.message);
+    console.error('❌ Статус:', error.response?.status);
+    console.error('❌ Данные:', error.response?.data);
+    
     res.status(500).json({
       success: false,
-      message: 'Не удалось получить инвентарь. Возможно, профиль приватный.'
+      message: 'Не удалось получить инвентарь. Возможно, профиль приватный или инвентарь пуст.'
     });
   }
 });
